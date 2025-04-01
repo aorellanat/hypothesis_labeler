@@ -1,8 +1,6 @@
 import streamlit as st
 import json
 import pandas as pd
-import random
-from pathlib import Path
 
 def ideological_dimensions_box():
     with  st.expander("Ideological dimensions (click to expand)", expanded=False):
@@ -137,15 +135,6 @@ def main(
     with open(hypotheses_path, "r") as f:
         hypotheses = pd.DataFrame([json.loads(line) for line in f])
 
-    # Sample 5 hypotheses per topic if more than 5 exist
-    if 'sampled_hypotheses' not in st.session_state:
-        st.session_state.sampled_hypotheses = hypotheses.copy()
-        for idx, row in st.session_state.sampled_hypotheses.iterrows():
-            if len(row['hypotheses']) > 5:
-                st.session_state.sampled_hypotheses.at[idx, 'hypotheses'] = random.sample(row['hypotheses'], 5)
-
-    hypotheses = st.session_state.sampled_hypotheses
-
     col1, col2 = st.columns([4, 1])
     with col1:
         st.title("Hypothesis labeler")
@@ -167,6 +156,7 @@ def main(
             labeled_data.append({
                 'topic_id': topic_id,
                 'topic': topic_row['topic'],
+                'top_term': topic_row['top_term'],
                 'hypothesis': hypothesis['hypothesis'],
                 'dimension': hypothesis['dimension'],
                 'label': label
@@ -254,15 +244,13 @@ def main(
         st.markdown(f"""
             <div class="topic-info">
                 <h6>Topic: {current_topic['topic']}</h6>
+                <p><strong>Top term (more general concept for this topic):</strong> {current_topic['top_term']}</p>
                 <div class="topic-stats">
                     <p><strong>Number of hypotheses for this topic:</strong> {len(current_hypotheses)}</p>
                     <p><strong>Progress:</strong> Hypothesis {st.session_state.current_hypothesis_idx + 1} of {len(current_hypotheses)}</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
-        
-        if len(current_topic['hypotheses']) == 5:
-            st.info("⚡ This topic has been sampled to 5 hypotheses from a larger set")
         
         if st.session_state.current_hypothesis_idx < len(current_hypotheses):
             current_hypothesis = current_hypotheses[st.session_state.current_hypothesis_idx]
