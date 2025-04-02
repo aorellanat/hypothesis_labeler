@@ -144,7 +144,7 @@ def display_hypothesis(hypothesis):
 
 
 def main(
-    hypotheses_path: str = "results/hypotheses/hypotheses_31_03_2025_17_48_32.jsonl"
+    hypotheses_path: str = "app/hypotheses_31_03_2025_17_48_32.jsonl"
 ):
     if 'current_topic_idx' not in st.session_state:
         st.session_state.current_topic_idx = 0
