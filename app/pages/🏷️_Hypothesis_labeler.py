@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import pandas as pd
 
+
 def ideological_dimensions_box():
     with  st.expander("Ideological dimensions (click to expand)", expanded=False):
         st.write(f'''
@@ -38,18 +39,15 @@ def criteria_box(hypothesis_id: str, dimension: str, current_labels: dict = None
             current_labels = {
                 'clarity': None,
                 'relevance': None,
-                'eu_law': None
             }
 
         # Initialize session state for this hypothesis if not exists
         if f"labels_{hypothesis_id}_{dimension}" not in st.session_state:
             st.session_state[f"labels_{hypothesis_id}_{dimension}"] = current_labels
 
-        # Create radio buttons for each criterion
         criteria = {
             'clarity': "Is the hypothesis clearly and coherently stated?",
             'relevance': "Does the hypothesis explicitly address the specified topic and clearly connect it to a relevant ideological dimension?",
-            'eu_law': "Is the hypothesis relevant to EU law?"
         }
 
         for criterion, question in criteria.items():
@@ -76,12 +74,14 @@ def criteria_box(hypothesis_id: str, dimension: str, current_labels: dict = None
 
         st.markdown("---")
         st.write("**Current labels:**")
-        for criterion, label in st.session_state[f"labels_{hypothesis_id}_{dimension}"].items():
-            if label:
-                icon = ":material/check:" if label == "yes" else ":material/close:"
-                st.info(f"{criterion.replace('_', ' ').title()}: {label.upper()}", icon=icon)
-            else:
-                st.warning(f"{criterion.replace('_', ' ').title()}: Not selected yet")
+        col1, col2 = st.columns(2)
+        for i, (criterion, label) in enumerate(st.session_state[f"labels_{hypothesis_id}_{dimension}"].items()):
+            with col1 if i == 0 else col2:
+                if label:
+                    icon = ":material/check:" if label == "yes" else ":material/close:"
+                    st.info(f"{criterion.replace('_', ' ').title()}: {label.upper()}", icon=icon)
+                else:
+                    st.warning(f"{criterion.replace('_', ' ').title()}: Not selected yet")
 
 
 def save_labeled_hypotheses(hypotheses: pd.DataFrame):
@@ -144,7 +144,7 @@ def display_hypothesis(hypothesis):
 
 
 def main(
-    hypotheses_path: str = "app/hypotheses_31_03_2025_17_48_32.jsonl"
+    hypotheses_path: str = "app/hypotheses_31_03_2025_17_48_32.jsonl",
 ):
     if 'current_topic_idx' not in st.session_state:
         st.session_state.current_topic_idx = 0
@@ -247,8 +247,7 @@ def main(
             }
             .topic-info h6 {
                 color: #9B59B6;
-                margin-bottom: 10px;
-                font-weight: 600;
+                font-weight: bold;
             }
             .topic-info p {
                 margin: 0;
@@ -257,7 +256,6 @@ def main(
             .topic-stats {
                 display: flex;
                 gap: 40px;
-                margin-top: 10px;
             }
             </style>
         """, unsafe_allow_html=True)
@@ -265,8 +263,8 @@ def main(
         st.markdown(f"""
             <div class="topic-info">
                 <h6>Topic: {current_topic['topic']}</h6>
-                <p><strong>Top term (more general concept for this topic):</strong> {current_topic['top_term']}</p>
                 <div class="topic-stats">
+                    <p><strong>Top term (more general concept for this topic):</strong> {current_topic['top_term']}</p>
                     <p><strong>Number of hypotheses for this topic:</strong> {len(current_hypotheses)}</p>
                     <p><strong>Progress:</strong> Hypothesis {st.session_state.current_hypothesis_idx + 1} of {len(current_hypotheses)}</p>
                 </div>
