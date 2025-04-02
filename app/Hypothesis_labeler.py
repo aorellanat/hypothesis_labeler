@@ -28,39 +28,60 @@ def ideological_dimensions_box():
         ''')
 
 
-def criteria_box(hypothesis_id: str, dimension: str, current_label: str = None):
+def criteria_box(hypothesis_id: str, dimension: str, current_labels: dict = None):
     with st.container(border=True):
         st.write("""
         **Evaluation criteria:** Please assess whether the hypothesis meets the following requirements:
-
-        1. Is the hypothesis clearly and coherently stated?
-        2. Does the hypothesis explicitly address the specified topic and clearly connect it to a relevant ideological dimension?
-        3. Is the hypothesis relevant to EU law?
         """)
 
-        _, col2, col3 = st.columns([3, 0.5, 0.5])   
-        if f"label_{hypothesis_id}_{dimension}" not in st.session_state:
-            st.session_state[f"label_{hypothesis_id}_{dimension}"] = current_label
+        if current_labels is None:
+            current_labels = {
+                'clarity': None,
+                'relevance': None,
+                'eu_law': None
+            }
 
-        with col2:
-            if st.button("YES", key=f"agree_{hypothesis_id}_{dimension}", use_container_width=True):
-                st.session_state[f"label_{hypothesis_id}_{dimension}"] = "yes"
-                # Update labeled_data in session state
-                topic_id, hypothesis_idx = hypothesis_id.split('_')
-                st.session_state.labeled_data[(topic_id, int(hypothesis_idx))] = "yes"
-                st.rerun()
-        with col3:
-            if st.button("NO", key=f"disagree_{hypothesis_id}_{dimension}", use_container_width=True, type="primary"):
-                st.session_state[f"label_{hypothesis_id}_{dimension}"] = "no"
-                # Update labeled_data in session state
-                topic_id, hypothesis_idx = hypothesis_id.split('_')
-                st.session_state.labeled_data[(topic_id, int(hypothesis_idx))] = "no"
-                st.rerun()
+        # Initialize session state for this hypothesis if not exists
+        if f"labels_{hypothesis_id}_{dimension}" not in st.session_state:
+            st.session_state[f"labels_{hypothesis_id}_{dimension}"] = current_labels
 
-        if st.session_state[f"label_{hypothesis_id}_{dimension}"]:
-            label = st.session_state[f"label_{hypothesis_id}_{dimension}"].upper()
-            icon = ":material/check:" if label == "YES" else ":material/close:"
-            st.info(f"**Current label:** {label}", icon=icon)
+        # Create radio buttons for each criterion
+        criteria = {
+            'clarity': "Is the hypothesis clearly and coherently stated?",
+            'relevance': "Does the hypothesis explicitly address the specified topic and clearly connect it to a relevant ideological dimension?",
+            'eu_law': "Is the hypothesis relevant to EU law?"
+        }
+
+        for criterion, question in criteria.items():
+            st.write(f"**{question}**")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                response = st.radio(
+                    f"Response for {criterion}",
+                    options=["Select", "Yes", "No"],
+                    key=f"{hypothesis_id}_{dimension}_{criterion}",
+                    horizontal=True,
+                    label_visibility="collapsed",
+                    index=0
+                )
+
+                if response != "Select":
+                    st.session_state[f"labels_{hypothesis_id}_{dimension}"][criterion] = response.lower()
+
+        # Update labeled_data in session state only if all criteria have been selected
+        all_selected = all(label is not None for label in st.session_state[f"labels_{hypothesis_id}_{dimension}"].values())
+        if all_selected:
+            topic_id, hypothesis_idx = hypothesis_id.split('_')
+            st.session_state.labeled_data[(topic_id, int(hypothesis_idx))] = st.session_state[f"labels_{hypothesis_id}_{dimension}"]
+
+        st.markdown("---")
+        st.write("**Current labels:**")
+        for criterion, label in st.session_state[f"labels_{hypothesis_id}_{dimension}"].items():
+            if label:
+                icon = ":material/check:" if label == "yes" else ":material/close:"
+                st.info(f"{criterion.replace('_', ' ').title()}: {label.upper()}", icon=icon)
+            else:
+                st.warning(f"{criterion.replace('_', ' ').title()}: Not selected yet")
 
 
 def save_labeled_hypotheses(hypotheses: pd.DataFrame):
@@ -123,7 +144,7 @@ def display_hypothesis(hypothesis):
 
 
 def main(
-    hypotheses_path: str = "app/hypotheses_31_03_2025_17_48_32.jsonl"
+    hypotheses_path: str = "results/hypotheses/hypotheses_31_03_2025_17_48_32.jsonl"
 ):
     if 'current_topic_idx' not in st.session_state:
         st.session_state.current_topic_idx = 0
@@ -150,7 +171,7 @@ def main(
         """, unsafe_allow_html=True)
         
         labeled_data = []
-        for (topic_id, hypothesis_idx), label in st.session_state.labeled_data.items():
+        for (topic_id, hypothesis_idx), labels in st.session_state.labeled_data.items():
             topic_row = hypotheses[hypotheses['id'] == topic_id].iloc[0]
             hypothesis = topic_row['hypotheses'][hypothesis_idx]
             labeled_data.append({
@@ -159,7 +180,7 @@ def main(
                 'top_term': topic_row['top_term'],
                 'hypothesis': hypothesis['hypothesis'],
                 'dimension': hypothesis['dimension'],
-                'label': label
+                'labels': labels
             })
         
         if labeled_data:
@@ -258,9 +279,9 @@ def main(
             display_hypothesis(current_hypothesis)
             
             hypothesis_key = f"{current_topic['id']}_{st.session_state.current_hypothesis_idx}"
-            current_label = st.session_state.labeled_data.get(hypothesis_key)
+            current_labels = st.session_state.labeled_data.get(hypothesis_key)
             
-            criteria_box(hypothesis_key, current_hypothesis['dimension'], current_label)
+            criteria_box(hypothesis_key, current_hypothesis['dimension'], current_labels)
 
             st.markdown("""
                 <style>
