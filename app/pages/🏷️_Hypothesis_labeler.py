@@ -41,7 +41,6 @@ def criteria_box(hypothesis_id: str, dimension: str, current_labels: dict = None
                 'relevance': None,
             }
 
-        # Initialize session state for this hypothesis if not exists
         if f"labels_{hypothesis_id}_{dimension}" not in st.session_state:
             st.session_state[f"labels_{hypothesis_id}_{dimension}"] = current_labels
 
@@ -69,7 +68,7 @@ def criteria_box(hypothesis_id: str, dimension: str, current_labels: dict = None
         # Update labeled_data in session state only if all criteria have been selected
         all_selected = all(label is not None for label in st.session_state[f"labels_{hypothesis_id}_{dimension}"].values())
         if all_selected:
-            topic_id, hypothesis_idx = hypothesis_id.split('_')
+            topic_id, hypothesis_idx = hypothesis_id.split('__')
             st.session_state.labeled_data[(topic_id, int(hypothesis_idx))] = st.session_state[f"labels_{hypothesis_id}_{dimension}"]
 
         st.markdown("---")
@@ -276,7 +275,7 @@ def main(
             
             display_hypothesis(current_hypothesis)
             
-            hypothesis_key = f"{current_topic['id']}_{st.session_state.current_hypothesis_idx}"
+            hypothesis_key = f"{current_topic['id']}__{st.session_state.current_hypothesis_idx}"
             current_labels = st.session_state.labeled_data.get(hypothesis_key)
             
             criteria_box(hypothesis_key, current_hypothesis['dimension'], current_labels)
