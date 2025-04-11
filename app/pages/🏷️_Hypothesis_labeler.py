@@ -1,6 +1,22 @@
-import streamlit as st
 import json
+import sys
+from pathlib import Path
+
 import pandas as pd
+import streamlit as st
+
+project_root = Path().absolute()
+sys.path.append(str(project_root))
+
+
+@st.cache_data(show_spinner=False)
+def load_jsonl_results(file_path):
+    """Load results from JSONL file."""
+    results = []
+    with open(file_path, "r") as f:
+        for line in f:
+            results.append(json.loads(line))
+    return pd.DataFrame(results)
 
 
 def ideological_dimensions_box():
@@ -143,7 +159,9 @@ def display_hypothesis(hypothesis):
 
 
 def main(
-    hypotheses_path: str = "app/hypotheses_31_03_2025_17_48_32.jsonl",
+    hypotheses_path: str = "app/hypotheses_09_04_2025_10_38_54.jsonl",
+    number_of_hypotheses: int = 200,
+    random_seed: int = 42,
 ):
     if 'current_topic_idx' not in st.session_state:
         st.session_state.current_topic_idx = 0
@@ -152,8 +170,17 @@ def main(
     if 'labeled_data' not in st.session_state:
         st.session_state.labeled_data = {}
 
-    with open(hypotheses_path, "r") as f:
-        hypotheses = pd.DataFrame([json.loads(line) for line in f])
+    hypotheses = load_jsonl_results(hypotheses_path)
+    hypotheses = hypotheses[hypotheses['hypotheses'].apply(lambda x: len(x) > 0)]
+
+    hypotheses_exploded = hypotheses.explode('hypotheses')
+    hypotheses_normalized = pd.json_normalize(hypotheses_exploded['hypotheses'])
+    hypotheses = hypotheses_exploded.drop(columns='hypotheses').reset_index(drop=True).join(hypotheses_normalized.reset_index(drop=True))
+
+    total_topics = hypotheses['id'].nunique()
+    total_hypotheses = hypotheses['id'].count()
+
+    sampled_hypotheses = hypotheses.sample(n=number_of_hypotheses, random_state=random_seed)
 
     col1, col2 = st.columns([4, 1])
     with col1:
@@ -170,15 +197,14 @@ def main(
         """, unsafe_allow_html=True)
         
         labeled_data = []
-        for (topic_id, hypothesis_idx), labels in st.session_state.labeled_data.items():
-            topic_row = hypotheses[hypotheses['id'] == topic_id].iloc[0]
-            hypothesis = topic_row['hypotheses'][hypothesis_idx]
+        for (topic_id, _), labels in st.session_state.labeled_data.items():
+            topic_row = sampled_hypotheses[sampled_hypotheses['id'] == topic_id].iloc[0]
             labeled_data.append({
                 'topic_id': topic_id,
                 'topic': topic_row['topic'],
                 'top_term': topic_row['top_term'],
-                'hypothesis': hypothesis['hypothesis'],
-                'dimension': hypothesis['dimension'],
+                'hypothesis': topic_row['hypothesis'],
+                'dimension': topic_row['dimension'],
                 'labels': labels
             })
         
@@ -203,9 +229,105 @@ def main(
                 disabled=True
             )
 
-    total_topics = len(hypotheses)
+    # Display dataset statistics
+    with st.expander("Dataset statistics", expanded=True):
+        st.markdown("""
+            <style>
+            .stats-container {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 10px;
+                margin: 10px 0;
+            }
+            .stats-title {
+                color: #2E9BF5;
+                font-weight: bold;
+                margin-bottom: 20px;
+                text-align: center;
+                font-size: 1.2em;
+            }
+            .dataset-box {
+                background-color: white;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 10px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                flex: 1;
+            }
+            .dataset-title {
+                color: #2E9BF5;
+                font-weight: bold;
+                margin-bottom: 10px;
+                border-bottom: 2px solid #f0f0f0;
+                padding-bottom: 8px;
+            }
+            .dataset-stats {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .stat-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 5px 0;
+            }
+            .stat-label {
+                color: #666;
+            }
+            .stat-value {
+                font-weight: bold;
+                color: #2E9BF5;
+            }
+            .datasets-grid {
+                display: flex;
+                gap: 20px;
+                justify-content: space-between;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+            <div class="stats-container">
+                <div class="stats-title">Dataset statistics</div>
+                <div class="datasets-grid">
+                    <div class="dataset-box">
+                        <div class="dataset-title">Original dataset</div>
+                        <div class="dataset-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Topics:</span>
+                                <span class="stat-value">{}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Hypotheses:</span>
+                                <span class="stat-value">{}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dataset-box">
+                        <div class="dataset-title">Sampled dataset</div>
+                        <div class="dataset-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Topics:</span>
+                                <span class="stat-value">{}</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Hypotheses:</span>
+                                <span class="stat-value">{}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """.format(
+            total_topics,
+            total_hypotheses,
+            sampled_hypotheses['id'].nunique(),
+            len(sampled_hypotheses)
+        ), unsafe_allow_html=True)
+
+    total_topics = sampled_hypotheses['id'].nunique()
     remaining_topics = total_topics - st.session_state.current_topic_idx
-    total_hypotheses = sum(len(row['hypotheses']) for _, row in hypotheses.iterrows())
+    total_hypotheses = len(sampled_hypotheses)
     
     labeled_hypotheses = len(st.session_state.labeled_data)
 
@@ -231,9 +353,8 @@ def main(
 
     ideological_dimensions_box()
 
-    if st.session_state.current_topic_idx < len(hypotheses):
-        current_topic = hypotheses.iloc[st.session_state.current_topic_idx]
-        current_hypotheses = current_topic['hypotheses']
+    if st.session_state.current_topic_idx < len(sampled_hypotheses):
+        current_topic = sampled_hypotheses.iloc[st.session_state.current_topic_idx]
         
         st.markdown("""
             <style>
@@ -264,62 +385,45 @@ def main(
                 <h6>Topic: {current_topic['topic']}</h6>
                 <div class="topic-stats">
                     <p><strong>Top term (more general concept for this topic):</strong> {current_topic['top_term']}</p>
-                    <p><strong>Number of hypotheses for this topic:</strong> {len(current_hypotheses)}</p>
-                    <p><strong>Progress:</strong> Hypothesis {st.session_state.current_hypothesis_idx + 1} of {len(current_hypotheses)}</p>
                 </div>
             </div>
         """, unsafe_allow_html=True)
         
-        if st.session_state.current_hypothesis_idx < len(current_hypotheses):
-            current_hypothesis = current_hypotheses[st.session_state.current_hypothesis_idx]
-            
-            display_hypothesis(current_hypothesis)
-            
-            hypothesis_key = f"{current_topic['id']}__{st.session_state.current_hypothesis_idx}"
-            current_labels = st.session_state.labeled_data.get(hypothesis_key)
-            
-            criteria_box(hypothesis_key, current_hypothesis['dimension'], current_labels)
+        display_hypothesis(current_topic)
+        
+        hypothesis_key = f"{current_topic['id']}__{st.session_state.current_hypothesis_idx}"
+        current_labels = st.session_state.labeled_data.get(hypothesis_key)
+        
+        criteria_box(hypothesis_key, current_topic['dimension'], current_labels)
 
-            st.markdown("""
-                <style>
-                div.navigation-button button {
-                    width: 100%;
-                    height: 50px;
-                    margin: 10px 0;
-                }
-                </style>
-            """, unsafe_allow_html=True)
+        st.markdown("""
+            <style>
+            div.navigation-button button {
+                width: 100%;
+                height: 50px;
+                margin: 10px 0;
+            }
+            </style>
+        """, unsafe_allow_html=True)
 
-            col1, _, col3 = st.columns([0.5, 2, 0.5])
-            with col1:
-                if st.button("⬅️ Previous", 
-                         disabled=st.session_state.current_topic_idx == 0 and st.session_state.current_hypothesis_idx == 0,
-                         use_container_width=True):
-                    if st.session_state.current_hypothesis_idx > 0:
-                        st.session_state.current_hypothesis_idx -= 1
-                    elif st.session_state.current_topic_idx > 0:
-                        st.session_state.current_topic_idx -= 1
-                        st.session_state.current_hypothesis_idx = len(hypotheses.iloc[st.session_state.current_topic_idx]['hypotheses']) - 1
-                    st.rerun()
+        col1, _, col3 = st.columns([0.5, 2, 0.5])
+        with col1:
+            if st.button("⬅️ Previous", 
+                    disabled=st.session_state.current_topic_idx == 0,
+                    use_container_width=True):
+                st.session_state.current_topic_idx -= 1
+                st.rerun()
 
-            with col3:
-                if st.button("Next ➡️", use_container_width=True):
-                    if st.session_state.current_hypothesis_idx < len(current_hypotheses) - 1:
-                        st.session_state.current_hypothesis_idx += 1
-                    else:
-                        st.session_state.current_topic_idx += 1
-                        st.session_state.current_hypothesis_idx = 0
-                    st.rerun()
-
+        with col3:
+            if st.button("Next ➡️", use_container_width=True):
+                if st.session_state.current_topic_idx < len(sampled_hypotheses) - 1:
+                    st.session_state.current_topic_idx += 1
+                else:
+                    st.session_state.current_topic_idx = len(sampled_hypotheses)
+                st.rerun()
     else:
-        st.success("🎉 All topics have been reviewed")
+        st.success('🎉 All topics have been reviewed! Please save your progress')
 
 
 if __name__ == "__main__":
-    st.set_page_config(
-        page_title="Stance detection",
-        page_icon="🎯",
-        layout="wide"
-    )
-    
     main()
