@@ -39,38 +39,36 @@ def load_jsonl_results(file_path):
 
 
 def calculate_metrics(topics_data, labeled_data):
-    """Calculate precision, recall, and F1 score using scikit-learn."""
+    """Calculate precision, recall, and F1 score for multilabel classification."""
     if not labeled_data:
         return {"precision": 0, "recall": 0, "f1": 0}
     
+    all_dimensions = list(DIMENSIONS_DESCRIPTIONS.keys())
     y_true = []
     y_pred = []
     
     for topic_id, user_dimensions in labeled_data.items():
-        # Find the topic in the dataset
         topic_entry = next((topic for topic in topics_data if topic["id"] == topic_id), None)
         if not topic_entry or "hypotheses" not in topic_entry:
             continue
         
-        true_dimensions = set()
-        for hypothesis in topic_entry["hypotheses"]:
-            true_dimensions.add(hypothesis["dimension"])
+        # Collect ground truth dimensions
+        true_dimensions = {hyp["dimension"] for hyp in topic_entry["hypotheses"]}
 
-        all_dimensions = list(DIMENSIONS_DESCRIPTIONS.keys())
-        
+        # Convert both sets into binary vectors
         true_vector = [1 if dim in true_dimensions else 0 for dim in all_dimensions]
         pred_vector = [1 if dim in user_dimensions else 0 for dim in all_dimensions]
         
         y_true.append(true_vector)
         y_pred.append(pred_vector)
     
-    if not y_true or not y_pred:
+    if not y_true:
         return {"precision": 0, "recall": 0, "f1": 0}
 
     precision, recall, f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, average='micro', zero_division=0
+        y_true, y_pred, average="micro", zero_division=0
     )
-    
+
     return {
         "precision": precision,
         "recall": recall,
