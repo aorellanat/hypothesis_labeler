@@ -3,3 +3,4 @@ pathlib
 streamlit
 numpy
 pandas
+scikit-learn
