@@ -11,13 +11,13 @@ sys.path.append(str(project_root))
 from app.utils import DIMENSIONS_DESCRIPTIONS, calculate_metrics, load_jsonl_results
 
 
-def initialize_session_state(hypotheses_path: str, num_topics: int, random_seed: int):
+def initialize_session_state(sampled_topics_path: str, hypotheses_path: str):
     if "topics_data" not in st.session_state:
+        df_sampled_topics = load_jsonl_results(sampled_topics_path)
+        unique_topic_ids = df_sampled_topics['id'].unique()
+
         df_topics_data = load_jsonl_results(hypotheses_path)
-        if len(df_topics_data) > num_topics:
-            st.session_state.topics_data = df_topics_data.sample(num_topics, random_state=random_seed)
-        else:
-            st.session_state.topics_data = df_topics_data
+        st.session_state.topics_data = df_topics_data[df_topics_data['id'].isin(unique_topic_ids)]
 
     if "current_topic_idx" not in st.session_state:
         st.session_state.current_topic_idx = 0
@@ -58,13 +58,12 @@ def display_ideological_dimensions(current_selections=None):
         return selected_dimensions
 
 def main(
+    sampled_topics_path: str = "app/sampled_hypotheses_42.jsonl",
     hypotheses_path: str = "app/hypotheses_09_04_2025_10_38_54.jsonl",
-    num_topics: int = 200,
-    random_seed: int = 42,
     output_path: str = 'topics_ideological_dimensions',
     output_path_metrics: str = 'topics_ideological_dimensions_metrics',
 ):
-    initialize_session_state(hypotheses_path, num_topics, random_seed)
+    initialize_session_state(sampled_topics_path, hypotheses_path)
 
     col1, col2 = st.columns([3, 1])
     with col1:
